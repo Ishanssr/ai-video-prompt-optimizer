@@ -15,16 +15,16 @@ Source: Google Cloud Blog - "Ultimate prompting guide for Veo 3.1"
 |---------|---------------|
 | **Cinematography** | ONE camera move per clip (slow push-in, dolly, tracking). Two moves fight each other |
 | **Subject** | Specific, detailed (car model, color, condition). Never "a car" |
-| **Action** | ONE beat per clip. 8 seconds holds a glance, a turn, a reveal - not a sequence |
+| **Action** | ONE primary action per clip, up to 3 supporting beats (single-shot default). Veo 3.1 multi-shot timed mode stitches timestamped segments instead |
 | **Context** | Sensory language: showroom, festive decor, time of day, lighting source |
 | **Lighting** | Single strongest realism anchor. Anchor to real sources (showroom LED, golden hour) |
 | **Style** | At END of prompt. "Cinematic color grade, shallow depth of field, film grain" |
-| **Audio** | The #1 missed lever. Veo generates native sync audio. Dialogue via COLON (no quotes) |
-| **Length** | 40-120 words sweet spot. Under 1,024 tokens |
+| **Audio** | The #1 missed lever. Veo generates native sync audio. Engine emits `Dialogue:`/`SFX:`/`Ambient:` colon labels — an engine convention, not a Google syntax requirement |
+| **Length** | 40-160 words. Under 15 loses control; over 160 the model drops instructions |
 | **Aspect** | 9:16 vertical for Instagram Reels (critical - these are reels!) |
-| **Duration** | 8s max per clip (4/6/8 for Veo 3) |
+| **Duration** | Veo 3.1 clips are 4, 6 or 8 seconds. Single-shot default; multi-shot timed for longer |
 | **Negatives** | Describe what you WANT as exclusion ("uncluttered, empty showroom floor") not "no clutter" |
-| **Timestamps** | Only for 2-beat shots: `[00:00-00:04]` / `[00:04-00:08]` |
+| **Timestamps** | Only in `MULTI_SHOT_TIMED` mode, derived from actually-fitted script timing |
 
 ### Key Rules
 1. **One camera move** per clip - over-directing creates "swooping mess"
@@ -39,44 +39,60 @@ Google's own developers use **meta-prompting**: ask an LLM to write elaborate pr
 - A structured template (human-maintainable)
 - Instructions that could feed a meta-prompt for elaboration
 
-## Architecture
+## Architecture (implemented)
 
 ```
 dealer-video-prompt-engine/
 ├── README.md
 ├── engine/
-│   ├── __init__.py
-│   ├── templates.py       # All 9 category templates (Veo formula based)
-│   ├── generator.py       # Main prompt builder
-│   ├── mapping.py         # Category → template mapping + scene blocks
-│   └── params.py          # Input parameters (brand, car, offer, etc.)
+│   ├── __init__.py                 # Public API (full_pipeline, Brief, enums, ...)
+│   ├── types.py                    # Brief, CampaignObjective, AdConcept, ContentFormat,
+│   │                               # GenerationMode, ScriptLanguage, SpeechModel/ful natural
+│   │                               # speech budget, OfferClaim/OfferType, ReferenceProfile,
+│   │                               # ScenePlan, ShotComn, Immutable/Mutable vehicle attrs,
+│   │                               # BrandPolicy, ValidationScore, RepairPlan ...
+│   ├── prompt_compiler.py          # full_pipeline() orchestration + compile_prompt +
+│   │                               # structural repair loop (validate → fix ScenePlan → recompile)
+│   ├── creative_director.py        # Strategy per objective+concept+format+language
+│   ├── script_engine.py            # Script with SpeechModel-budgeted lines + rewrite engine
+│   ├── scene_planner.py            # ScenePlan: single source of action/camera/motion
+│   ├── camera_engine.py            # Shot composition: safe zones, framing, position
+│   ├── offer_engine.py             # Verified vs unverified offer claims (no invented numbers)
+│   ├── reference_engine.py         # ReferenceProfile, immutable/mutable split, scale graph
+│   ├── brand_engine.py             # BrandPolicy + model/variant feature applicability
+│   ├── audio_engine.py             # Dialogue/SFX/Ambient/Music directive compiler
+│   ├── validator.py                # Semantic validation + scored result (0-100, A-F)
+│   └── repair.py                   # STRUCTURAL repair (fix the data, then recompile)
 ├── examples/
-│   └── sample_prompts.md  # Rendered examples for all 9 categories
-└── references/
-    └── veo_prompting_guide.md  # Research summary
+│   ├── run_pipeline.py              # End-to-end demo (4 demos)
+│   └── sample_prompts.md            # Rendered examples
+├── references/
+│   └── veo_prompting_guide.md      # Research summary (corrected)
+└── tests/                          # run_all.py + per-module suites
 ```
 
-## Prompt Template Recipe (each category)
+## Prompt Template Recipe (implemented)
 
-Every generated prompt renders as:
-
-```
-[SHOT TYPE + CAMERA MOVE] of [SUBJECT: car model + color + condition],
-[ACTION: single beat], in [CONTEXT: location + lighting + atmosphere].
-[STYLE: grade + lens + film look]. [AUDIO: ambience + dialogue + score].
-9:16 vertical, 8 seconds. Motion low.
-```
-
-Actually NO - research says narrative blending beats rigid sections. So:
+The engine compiles its prompts structurally from a `ScenePlan` + `Script` +
+`ReferenceProfile` + `BrandPolicy`, one labeled section per control axis:
 
 ```
-"Cinematic slow push-in on a glossy BMW 5 Series in deep blue,
-parked under festive marigold garlands in a dealership showroom.
-Warm golden string lights create soft bokeh. A sales executive
-hands over the keys with a genuine smile. Shallow depth of field,
-photoreal commercial grade, warm festive tones. Ambient: soft
-festival music, gentle crowd murmur. SFX: keys jingling."
+Cinematography: <one camera move>            (no chained moves)
+Subject: <presenter/vehicle identity>
+Secondary subject: <vehicle w/ identity + position>   (deduped if same as subject)
+Action: <one primary action> while <beats>   (plan-derived, prose re-verified at validation)
+Context: <location>. <lighting>.             (incl. environment reference overrides)
+Style: photorealistic commercial, ...
+Audio: Dialogue: ... Music: ... Ambient: ... SFX: ...
+References: <ingredients-to-video images>    (immutable identity + scale graph)
+Brand: <approved terminology + constraints>
+Composite after generation: <overlays>       (never generated in Veo)
+Format: 9:16 vertical, 8 seconds (Veo 3.1)
 ```
+
+Because the prose in the `Action:`/`Context:` sections is regenerated from the
+same plans every compile, a validator re-checks the *plans* — not regex-patched
+final text. Repair changes the `ScenePlan`/`Script`, then recompiles.
 
 ## Category Templates (based on reference reels)
 
@@ -143,7 +159,10 @@ festival music, gentle crowd murmur. SFX: keys jingling."
 - **Mood**: professional, reliable, caring
 - **Audio**: workshop ambient, wrench SFX, soft professionalism music
 
-## Implementation Plan
+## Historical Implementation Plan (pre-rewrite notes)
+
+The original plan below predates the current engine; the implemented design and
+architecture live in the "Architecture (implemented)" section above.
 
 ### Step 1: Core Framework
 - `params.py`: CarType, Brand, Color, Festival, Offer, Tone, Duration
@@ -154,9 +173,11 @@ festival music, gentle crowd murmur. SFX: keys jingling."
 - Generate one example per category for a sample car (e.g., "Tata Nexon")
 - Write to `examples/sample_prompts.md`
 
-### Step 3: Validation
-- Character/token count check (40-120 words target)
-- Checklist verification (has camera, action, context, audio?)
+### Step 3: Validation *(superseded)*
+- Word-count check — **now a 40-180 word contract enforced by `validator.py`**
+  (under 40 loses control; over 180 risks dropped instructions)
+- Checklist verification (camera/action/context/audio) — superseded by the
+  semantic plan-level validator + structural repair loop
 
 ### Step 4: Meta-prompt interface
 - Optional mode: output a meta instruction to feed Gemini to elaborate the skeletal prompt
@@ -164,6 +185,6 @@ festival music, gentle crowd murmur. SFX: keys jingling."
 ## Success Criteria
 1. Each category produces a Veo-formula-compliant natural-language prompt
 2. Prompts are parameterized (brand, car, festival, offer)
-3. Word count within target range
+3. Word count within target range (40-180 enforced)
 4. Audio always present (the #1 missed lever)
 5. 9:16 vertical always emphasized (Instagram Reels)

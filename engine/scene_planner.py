@@ -1,8 +1,10 @@
 from .types import (
-    ScenePlan, ShotComposition, AudioPlan, AdTimeline,
+    ScenePlan, ShotComposition, AudioPlan,
     CampaignObjective, AdConcept, ContentFormat,
-    ScriptLanguage, Script,
+    ScriptLanguage, Script, GenerationMode,
 )
+from .creative_director import resolve_visual_action
+from .script_engine import rewrite_script_to_fit
 
 
 def plan_scene(
@@ -14,32 +16,42 @@ def plan_scene(
     script: Script = None,
     duration: int = 8,
     format: ContentFormat = ContentFormat.INSTAGRAM_REEL,
+    creative: dict = None,
+    generation_mode: GenerationMode = GenerationMode.SINGLE_SHOT,
 ) -> ScenePlan:
-    """Layer 3: Creates a full scene plan from creative strategy."""
+    """Layer 3: Creates a full scene plan from creative strategy.
 
+    The visual action comes from the SINGLE canonical source
+    (creative_director.resolve_visual_action) so the scene plan can never
+    contradict the creative brief.
+    """
     composition = _plan_composition(ad_concept)
-    audio = _plan_audio(ad_concept, script)
-    timeline = _plan_timeline(objective, ad_concept, duration)
+    audio = _plan_audio(ad_concept, script, duration)
+    timeline = _plan_timeline(objective, ad_concept, duration, script)
+
+    action = (creative or {}).get("visual_action") or resolve_visual_action(objective, ad_concept)
+    beats = action.get("beats", [])[:3]
 
     subject = _select_subject(ad_concept, brand, car_model)
-    action = _select_action(ad_concept, objective)
     location = _select_location(ad_concept, brand)
     lighting = _select_lighting(ad_concept)
 
     script_text = ""
     cta = ""
     if script:
-        script_text = script.compress(duration)
-        cta = script.cta.text
+        fitted = rewrite_script_to_fit(script, target_seconds=duration)
+        script_text = fitted.dialogue_text(duration, rewritten=False)
+        cta = fitted.cta.text
 
     return ScenePlan(
         duration=duration,
-        aspect_ratio="9:16",
+        aspect_ratio="9:16" if format != ContentFormat.YOUTUBE_SHORT else "9:16",
         shot_count=1,
         camera_move=composition.camera_move,
         subject=subject,
         secondary_subject=f"{car_colour} {car_model}" if car_model else "",
-        primary_action=action,
+        primary_action=action.get("primary", ""),
+        supporting_beats=beats,
         location=location,
         lighting=lighting,
         script_language=script.language.value if script else "hi-IN",
@@ -129,17 +141,17 @@ def _plan_composition(ad_concept: AdConcept) -> ShotComposition:
     return configs.get(ad_concept, configs[AdConcept.PRESENTER_LED])
 
 
-def _plan_audio(ad_concept: AdConcept, script: Script = None) -> AudioPlan:
-    has_dialogue = script and script.compress(8).strip()
+def _plan_audio(ad_concept: AdConcept, script: Script = None, duration: int = 8) -> AudioPlan:
+    dialogue = script.dialogue_text(duration, rewritten=True) if script else ""
     return AudioPlan(
-        voice_priority="dominant" if has_dialogue else "none",
-        music_level="-12dB relative" if has_dialogue else "primary",
+        voice_priority="dominant" if dialogue else "none",
+        music_level="-12dB relative" if dialogue else "primary",
         ambient_level="subtle",
         key_sfx=_select_sfx(ad_concept),
         cta_emphasis="final_sentence",
         music_style=_select_music(ad_concept),
         ambient_sounds=_select_ambient(ad_concept),
-        dialogue_colon=script.compress(8) if has_dialogue else "",
+        dialogue_colon=dialogue,
     )
 
 
@@ -147,7 +159,17 @@ def _plan_timeline(
     objective: CampaignObjective,
     ad_concept: AdConcept,
     duration: int,
+    script: Script = None,
 ) -> dict:
+    """Derive the timeline from the ACTUAL fitted script lines, not a guess."""
+    if script:
+        spoken = script.spoken_lines(duration)
+        if any(s["text"] for s in spoken):
+            beats = {}
+            for s in spoken:
+                beats[f"{s['start_seconds']:.1f}-{s['end_seconds']:.1f}"] = f"{s['segment']}: {s['text']}"
+            return {"speech_paced": beats, "total_seconds": duration}
+
     if ad_concept == AdConcept.TESTIMONIAL:
         return {
             "0.0-1.0": "Customer begins story",
@@ -181,29 +203,15 @@ def _plan_timeline(
 def _select_subject(ad_concept: AdConcept, brand: str, car_model: str) -> str:
     subjects = {
         AdConcept.PRESENTER_LED: f"salesperson in branded {brand} uniform",
-        AdConcept.VOICEOVER_LED: f"{car_model}" if car_model else "car",
+        AdConcept.VOICEOVER_LED: f"{car_model} as the hero" if car_model else "car as the hero",
         AdConcept.TESTIMONIAL: "satisfied car owner",
-        AdConcept.REVEAL: f"{car_model}" if car_model else "new car model",
+        AdConcept.REVEAL: f"{car_model} on a reveal stage" if car_model else "new car model on a reveal stage",
         AdConcept.DELIVERY_MOMENT: "family receiving car keys",
         AdConcept.SERVICE_TRUST: "certified service technician",
-        AdConcept.PRODUCT_SHOWCASE: f"{car_model} detail" if car_model else "car detail",
-        AdConcept.FESTIVE_CELEBRATION: f"{car_model} with festive decor" if car_model else "festive car",
+        AdConcept.PRODUCT_SHOWCASE: f"{car_model} in dramatic close-up" if car_model else "car in dramatic close-up",
+        AdConcept.FESTIVE_CELEBRATION: f"family celebrating beside the festive {car_model}" if car_model else "festive car",
     }
     return subjects.get(ad_concept, "presenter")
-
-
-def _select_action(ad_concept: AdConcept, objective: CampaignObjective) -> str:
-    actions = {
-        AdConcept.PRESENTER_LED: "presenter speaks directly to camera while standing beside the car",
-        AdConcept.VOICEOVER_LED: "car shown in cinematic motion",
-        AdConcept.TESTIMONIAL: "customer turns to camera with genuine smile",
-        AdConcept.REVEAL: "satin cover slides off in slow motion, spotlights converge",
-        AdConcept.DELIVERY_MOMENT: "family receives the keys in an emotional celebratory moment",
-        AdConcept.SERVICE_TRUST: "technician inspects the engine with precision",
-        AdConcept.PRODUCT_SHOWCASE: "camera glides slowly along body lines, light catching contours",
-        AdConcept.FESTIVE_CELEBRATION: "festive garlands placed on car, warm smiles",
-    }
-    return actions.get(ad_concept, "presenter speaks to camera")
 
 
 def _select_location(ad_concept: AdConcept, brand: str) -> str:

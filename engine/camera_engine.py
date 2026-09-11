@@ -104,11 +104,9 @@ def get_safe_zone_prompt(composition: ShotComposition) -> str:
     """Returns safe zone text for post-compositing guidance."""
     parts = []
     if composition.offer_card_visibility:
-        parts.append(f"Offer card: {composition.offer_card_visibility} — composite post-generation")
+        parts.append(f"Offer card: {composition.offer_card_visibility} (composite later)")
     if composition.cta_safe_zone:
-        parts.append(f"CTA: {composition.cta_safe_zone} — overlay post-generation")
-    if composition.vehicle_visibility and "background" in composition.vehicle_visibility:
-        parts.append(f"Vehicle: {composition.vehicle_visibility}")
+        parts.append(f"CTA: {composition.cta_safe_zone} (overlay later)")
     return ". ".join(parts) if parts else ""
 
 

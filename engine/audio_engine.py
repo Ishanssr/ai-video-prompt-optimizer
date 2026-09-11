@@ -1,4 +1,4 @@
-from .types import AudioPlan, Script, ScriptLanguage
+from .types import AudioPlan, Script, ScriptLanguage, SpeechModel
 
 
 def compile_audio_directive(audio_plan: AudioPlan, script: Script = None) -> str:
@@ -6,7 +6,7 @@ def compile_audio_directive(audio_plan: AudioPlan, script: Script = None) -> str
     parts = []
 
     if audio_plan.dialogue_colon:
-        parts.append(f"Dialogue: {audio_plan.dialogue_colon}")
+        parts.append(f"Dialogue: {audio_plan.dialogue_colon.rstrip('.')}")
 
     if audio_plan.music_style:
         music_desc = audio_plan.music_style
@@ -24,7 +24,7 @@ def compile_audio_directive(audio_plan: AudioPlan, script: Script = None) -> str
         parts.append(f"SFX: {sfx}")
 
     if audio_plan.cta_emphasis == "final_sentence" and script and script.cta.text:
-        parts.append(f"CTA emphasis: final spoken line, clear and prominent")
+        parts.append(f"CTA emphasis: final line, prominent")
 
     return ". ".join(parts) if parts else "Ambient: subtle background"
 
@@ -63,24 +63,13 @@ def validate_audio_plan(audio_plan: AudioPlan) -> list:
 
 
 def estimate_dialogue_fit(dialogue: str, target_seconds: int = 8, lang: ScriptLanguage = ScriptLanguage.HINDI) -> dict:
-    """Estimate if dialogue fits within target duration."""
-    words = dialogue.split()
-    word_count = len(words)
-    wps_rates = {
-        ScriptLanguage.HINDI: 3.2,
-        ScriptLanguage.HINGLISH: 3.0,
-        ScriptLanguage.ENGLISH: 2.8,
-    }
-    rate = wps_rates.get(lang, 3.0)
-    estimated = round(word_count / rate, 1)
-    max_words = int(target_seconds * rate)
-    fits = estimated <= target_seconds
-
+    """Estimate if dialogue fits the safe speech budget (canonical SpeechModel)."""
+    report = SpeechModel.fit_report(dialogue, target_seconds, lang)
     return {
-        "word_count": word_count,
-        "estimated_seconds": estimated,
-        "max_words_at_rate": max_words,
-        "fits": fits,
-        "words_over": max(0, word_count - max_words),
-        "rate": rate,
+        "word_count": report["words"],
+        "estimated_seconds": report["estimated_seconds"],
+        "max_words_at_rate": report["max_words_safe"],
+        "fits": report["fits_safe"],
+        "words_over": max(0, report["words"] - report["max_words_safe"]),
+        "rate": SpeechModel.rate(lang),
     }

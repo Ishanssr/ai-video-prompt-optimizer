@@ -1,10 +1,59 @@
 from .types import (
     CampaignObjective, AdConcept, ContentFormat,
-    ScriptLanguage, VoiceStyle, DeliveryPacing,
-    OfferType, OfferClaim, ReferenceProfile,
-    ScenePlan, ShotComposition, AudioPlan, AdTimeline,
-    BrandPolicy, Script, ScriptLine,
+    ScriptLanguage,
 )
+
+
+# ONE source of truth for the on-screen action. Every layer (creative
+# director, scene planner, compiler, validator) reads from this table, so
+# the "3 actions vs 1 action" divergence can no longer happen.
+# Each concept has exactly ONE primary action + up to 3 supporting beats
+# (beats are written as gerund phrases so they grammatically chain on
+# "while …").
+VISUAL_ACTIONS = {
+    (CampaignObjective.ENQUIRY, AdConcept.PRESENTER_LED): {
+        "primary": "presenter speaks directly to camera",
+        "beats": ["gesturing toward the car", "raising an offer card"],
+    },
+    (CampaignObjective.OFFER_AWARENESS, AdConcept.PRESENTER_LED): {
+        "primary": "presenter speaks directly to camera",
+        "beats": ["holding up an offer card", "pointing to car features"],
+    },
+    (CampaignObjective.BOOKING, AdConcept.PRESENTER_LED): {
+        "primary": "presenter speaks directly to camera",
+        "beats": ["inviting for a test drive", "walking toward the car"],
+    },
+    (CampaignObjective.TEST_DRIVE, AdConcept.PRESENTER_LED): {
+        "primary": "presenter speaks directly to camera",
+        "beats": ["pointing to the car", "offering the keys"],
+    },
+    (CampaignObjective.DELIVERY, AdConcept.DELIVERY_MOMENT): {
+        "primary": "family receives the car keys",
+        "beats": ["embracing in celebration", "opening the car door"],
+    },
+    (CampaignObjective.FESTIVE_PROMO, AdConcept.FESTIVE_CELEBRATION): {
+        "primary": "family celebrates beside the festive car",
+        "beats": ["placing a garland on the car", "raising hands in joy"],
+    },
+    (CampaignObjective.NEW_LAUNCH, AdConcept.REVEAL): {
+        "primary": "satin cover slides off the car",
+        "beats": ["converging spotlights", "presenter revealing the car"],
+    },
+    (CampaignObjective.SERVICE_BOOKING, AdConcept.SERVICE_TRUST): {
+        "primary": "technician inspects the car",
+        "beats": ["demonstrating care", "pointing to the service bay"],
+    },
+}
+
+_ACTION_FALLBACK = {
+    "primary": "presenter speaks directly to camera",
+    "beats": ["gestures toward the car"],
+}
+
+
+def resolve_visual_action(objective: CampaignObjective, ad_concept: AdConcept) -> dict:
+    """Single canonical action for any objective+concept combination."""
+    return VISUAL_ACTIONS.get((objective, ad_concept), _ACTION_FALLBACK)
 
 
 def creative_director(
@@ -19,7 +68,7 @@ def creative_director(
     """
     timeline = _build_timeline(objective, ad_concept)
     presenter = _select_presenter(ad_concept)
-    visual_action = _select_visual_action(objective, ad_concept)
+    visual_action = resolve_visual_action(objective, ad_concept)
     hook_strategy = _select_hook(objective, ad_concept, language)
 
     return {
@@ -128,19 +177,6 @@ def _select_presenter(ad_concept: AdConcept) -> dict:
         },
     }
     return presenters.get(ad_concept, presenters[AdConcept.PRESENTER_LED])
-
-
-def _select_visual_action(objective: CampaignObjective, ad_concept: AdConcept) -> str:
-    actions = {
-        (CampaignObjective.ENQUIRY, AdConcept.PRESENTER_LED): "presenter speaks to camera, gestures to car, shows offer",
-        (CampaignObjective.OFFER_AWARENESS, AdConcept.PRESENTER_LED): "presenter holds offer card, points to car features",
-        (CampaignObjective.BOOKING, AdConcept.PRESENTER_LED): "presenter invites for test drive, walks to car",
-        (CampaignObjective.DELIVERY, AdConcept.DELIVERY_MOMENT): "family receives keys, celebrates",
-        (CampaignObjective.FESTIVE_PROMO, AdConcept.FESTIVE_CELEBRATION): "festive decor, celebratory handover",
-        (CampaignObjective.NEW_LAUNCH, AdConcept.REVEAL): "cover slides off, car revealed",
-        (CampaignObjective.SERVICE_BOOKING, AdConcept.SERVICE_TRUST): "technician inspects, demonstrates care",
-    }
-    return actions.get((objective, ad_concept), "presenter speaks to camera")
 
 
 def _select_hook(objective: CampaignObjective, ad_concept: AdConcept, lang: ScriptLanguage) -> dict:

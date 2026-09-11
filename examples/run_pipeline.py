@@ -1,5 +1,7 @@
 """
-Full pipeline demo: brief → creative strategy → script → scene → offer → prompt → validate → repair.
+Full pipeline demo: ONE Brief → creative strategy → script (rewritten to fit)
+→ scene → reference → brand → audio → compile → validate → STRUCTURAL repair
+→ recompile → final validate → scored result.
 
 Run:  python3 examples/run_pipeline.py
 """
@@ -8,11 +10,10 @@ import sys
 sys.path.insert(0, ".")
 
 from engine import (
-    CampaignObjective, AdConcept, ContentFormat, ScriptLanguage, VoiceStyle,
-    OfferType, create_verified_offer, create_unverified_offer,
-    create_reference_profile, get_brand_policy,
-    creative_director, generate_script, plan_scene,
-    compile_optimized_prompt,
+    Brief, CampaignObjective, AdConcept, ContentFormat, ScriptLanguage, VoiceStyle,
+    DeliveryPacing, GenerationMode,
+    OfferType, create_verified_offer,
+    full_pipeline, resolve_visual_action,
 )
 
 
@@ -21,62 +22,70 @@ def demo_enquiry_reel():
     print(" DEMO 1: Hyundai enquiry reel (salesperson-led)")
     print("═══════════════════════════════════════════════════\n")
 
-    brief = creative_director(
+    brief = Brief(
         objective=CampaignObjective.ENQUIRY,
         ad_concept=AdConcept.PRESENTER_LED,
+        brand="Hyundai",
+        car_model="Creta",
+        car_colour="abyss black",
         format=ContentFormat.INSTAGRAM_REEL,
         language=ScriptLanguage.HINDI,
-    )
-    print(f"[Creative Director] Concept: {brief['ad_concept']}")
-    print(f"  Presenter: {brief['presenter']['description']}")
-    print(f"  Action: {brief['visual_action']}\n")
-
-    script = generate_script(
-        objective=CampaignObjective.ENQUIRY,
-        ad_concept=AdConcept.PRESENTER_LED,
-        language=ScriptLanguage.HINDI,
         voice_style=VoiceStyle.CONFIDENT,
-    )
-    print("[Script Engine]")
-    for line in script.all_lines:
-        if line.text:
-            print(f"  [{line.segment:8s}] {line.duration_seconds:.1f}s  {line.text}")
-    print(f"  total {script.total_words} words ≈ {script.estimated_duration:.1f}s (8s target)\n")
-
-    offer = create_unverified_offer(OfferType.FINANCE_RATE)
-    print(f"[Offer Engine] (no verified data) → {offer.to_safe_text(ScriptLanguage.HINGLISH)}\n")
-
-    scene = plan_scene(
-        CampaignObjective.ENQUIRY, AdConcept.PRESENTER_LED,
-        car_model="Creta", car_colour="abyss black", brand="Hyundai",
-        script=script,
-    )
-    print(f"[Scene Plan] {scene.composition.shot_type} · {scene.composition.camera_move}")
-    print(f"  subject={scene.subject!r} · car={scene.secondary_subject!r}")
-    print(f"  location={scene.location!r} · lighting={scene.lighting!r}\n")
-
-    result = compile_optimized_prompt(
-        scene,
-        script=script,
-        offer=offer,
-        brand_policy=get_brand_policy("Hyundai"),
+        pacing=DeliveryPacing.MEDIUM_FAST,
         duration=8,
+        offer=create_verified_offer(
+            OfferType.EXCHANGE_BONUS,
+            unit="₹", numeric_value=30000,
+            validity="31 Dec 2026",
+            model="Creta",
+            source="Hyundai dealer memo #142",
+        ),
     )
+
+    out = full_pipeline(brief)
+
+    print(f"[Brief] {brief.objective.value} · {brief.ad_concept.value} · {brief.car_model} · {brief.duration}s")
+    print(f"[Creative] action: {resolve_visual_action(brief.objective, brief.ad_concept)['primary']}")
+    print(f"[Script]  {out['script'].dialogue_text(brief.duration)}\n")
 
     print("────── FINAL VEO PROMPT ──────\n")
-    print(result["prompt"])
+    print(out["prompt"])
+    print("\n────── NARRATIVE FORM ──────\n")
+    print(out["prompt_narrative"])
     print("\n──────────────────────────────")
-    print(f"Validation passed: {result['validation']['passed']}")
-    print(f"Errors:   {result['validation']['errors']}")
-    print(f"Warnings: {result['validation']['warnings']}")
-    print(f"Repairs:  {result['repair_log']}")
+    print(f"Validation passed: {out['validation']['passed']}")
+    print(f"Errors:   {out['validation']['errors']}")
+    print(f"Warnings: {out['validation']['warnings']}")
+    print(f"Score:    {out['score']['final']} ({out['score']['final_grade']})")
+    print(f"Repairs:  {out['repair_log']}")
+    print(f"Composited after generation: {', '.join(out['overlay_plan']['composited_after'])}")
+
+
+def demo_script_rewriting():
+    print("\n═══════════════════════════════════════════════════")
+    print(" DEMO 2: Rewriting (not truncation) + claim guard")
+    print("═══════════════════════════════════════════════════\n")
+
+    brief = Brief(
+        objective=CampaignObjective.ENQUIRY,
+        ad_concept=AdConcept.PRESENTER_LED,
+        brand="Hyundai", car_model="Creta",
+        duration=8,
+        custom_hook="Duniya ki sabse best-selling SUV aapko is showroom mein milegi.",
+        custom_cta="Visit kijiye, ek number deal.",
+    )
+    out = full_pipeline(brief)
+
+    print(f"Repairs:  {out['repair_log']}")
+    print(f"Final:    {out['script'].dialogue_text(8)!r}")
+    print(f"Speech:   {out['script'].estimated_duration}s target 8s (safe budget ~6.8s)")
+    print(f"Score:    {out['score']['final']} ({out['score']['final_grade']})")
 
 
 def demo_verified_offer():
     print("\n═══════════════════════════════════════════════════")
-    print(" DEMO 2: Verified offer — numbers appear safely")
+    print(" DEMO 3: Verified offer — numbers appear safely")
     print("═══════════════════════════════════════════════════\n")
-
     offer = create_verified_offer(
         offer_type=OfferType.EXCHANGE_BONUS,
         numeric_value=25000,
@@ -85,33 +94,27 @@ def demo_verified_offer():
         model="Creta",
         source="Hyundai dealer memo #142",
     )
-    print(f"Verified offer → {offer.to_safe_text(ScriptLanguage.HINDI)}")
-    print(f"Voiceover      → {offer.to_safe_text(ScriptLanguage.ENGLISH)}")
-
-    offer2 = create_unverified_offer(OfferType.FINANCE_RATE)
-    print(f"Unverified      → {offer2.to_safe_text(ScriptLanguage.HINDI)}  (safe, no numbers)")
-    print(f"  disclaimer: {offer2.disclaimer or '(standard terms apply)'}")
+    from engine import offer_to_script_text
+    print(f"Verified offer → {offer_to_script_text(offer, ScriptLanguage.HINDI)}")
+    print(f"Voiceover      → {offer_to_script_text(offer, ScriptLanguage.ENGLISH)}")
 
 
-def demo_references():
+def demo_multishot():
     print("\n═══════════════════════════════════════════════════")
-    print(" DEMO 3: Reference profiles (Veo 3.1 Ingredients)")
+    print(" DEMO 4: Multi-shot timed mode scaffold")
     print("═══════════════════════════════════════════════════\n")
-
-    ref = create_reference_profile(
-        vehicle_model="Creta",
-        vehicle_colour="abyss black",
-        person_hair="black",
-        person_skin_tone="warm",
-        person_clothing="dark blue dealership uniform",
-        showroom_type="modern Hyundai showroom",
+    brief = Brief(
+        objective=CampaignObjective.BOOKING,
+        ad_concept=AdConcept.PRESENTER_LED,
+        brand="Maruti Suzuki", car_model="Baleno", car_colour="Nexa blue",
+        generation_mode=GenerationMode.MULTI_SHOT_TIMED,
     )
-    print(reference_to_ingredients_block(ref) if "reference_to_ingredients_block" in dir() else "run demo 1 first")
-    from engine import reference_to_ingredients_block
-    print(reference_to_ingredients_block(ref))
+    out = full_pipeline(brief)
+    print(out["prompt_timed"] or "(no timed scaffold for single-shot mode)")
 
 
 if __name__ == "__main__":
     demo_enquiry_reel()
+    demo_script_rewriting()
     demo_verified_offer()
-    demo_references()
+    demo_multishot()

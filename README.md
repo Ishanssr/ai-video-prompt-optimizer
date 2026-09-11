@@ -92,12 +92,12 @@ Audio: Dialogue: Aapke liye ek khaas offer laaye hain. Ismein special finance
   options available hain. Ye hamari best-selling SUV hai. Comfort aur safety dono.
   Music: upbeat professional (soft, behind dialogue). Ambient: soft showroom hum.
   SFX: subtle whoosh on camera move. CTA emphasis: final spoken line, clear and prominent
-Brand: Brand: Hyundai (official dealership setting). Approved terminology: SmartSense
+Brand: Hyundai (official dealership setting). Approved terminology: SmartSense
   safety, BlueLink connectivity, e-CALL (SOS), Panoramic Sunroof. No invented claims,
   no altered vehicle geometry. Do not generate readable logos or model-name text
-Compositing: Offer card: central_safe_zone — composite post-generation. CTA: lower_third
-  — overlay post-generation. Vehicle: rear_three_quarter_background
-Format: 9:16 vertical, 8 seconds
+Composite after generation (do not render in Veo): Offer card — central_safe_zone,
+  CTA overlay — lower_third
+Format: 9:16 vertical, 8 seconds (Veo 3.1)
 ```
 
 ## Offer Truth Layer
@@ -125,15 +125,19 @@ The validator runs `check_offer_claims()` — if an unverified offer appears alo
 
 ## Speech Duration Fit
 
-Veo's native dialogue is real — the engine calculates whether a script fits:
+Veo's native dialogue is real — the engine uses one canonical `SpeechModel`
+(words-per-second per language + a safe budget of 85% of ad duration, so an 8s
+ad targets ~6.5-7.0s of speech):
 
 ```python
-from engine import estimate_dialogue_fit, ScriptLanguage
-d = estimate_dialogue_fit("28-word script...", 8, ScriptLanguage.HINDI)
-# {'word_count': 28, 'estimated_seconds': 8.8, 'fits': False, 'words_over': 3}
+from engine import SpeechModel, ScriptLanguage
+r = SpeechModel.fit_report("28-word script...", 8, ScriptLanguage.HINDI)
+# {'word_count': 28, 'estimated_seconds': 8.8, 'fits_at_all': False, ...}
 ```
 
-Scripts that overflow are auto-compressed by `repair.py` before compilation.
+Scripts that overflow are rewritten/condensed by `repair.py` before compilation —
+trimming is budget-first (product → benefit → hook → offer → CTA), never a
+mid-sentence chop, and never strips unverified superlatives into the void.
 
 ## Reference Intelligence (Veo 3.1 Ingredients)
 
@@ -144,20 +148,25 @@ ref = create_reference_profile(
     person_clothing="dark blue dealership uniform",
 )
 reference_to_ingredients_block(ref)
-# "Reference images provided for: Vehicle reference: abyss black Creta…; Person reference: …; Environment reference: …"
+# "Reference images: Vehicle reference: abyss black Creta…; Person reference: …; Environment reference: …"
 ```
+
+Vehicle identity (model, colour, trim) stays **immutable**; camera attributes
+(position, orientation) are **mutable** and free to move during generation; a
+scale graph pins presenter-to-vehicle proportions.
 
 ## Brands Supported
 
-Hyundai, Maruti Suzuki, Mahindra, Kia, Tata (each with approved models + terminology). Unknown brands fall back to a strict generic policy.
+Hyundai, Maruti Suzuki, Mahindra, Kia, Tata (each with approved models +
+variant-level feature checks, e.g. Panoramic Sunroof only on SX(O) trims).
+Unknown brands fall back to a strict generic policy.
 
-## Workflow Modes (planned API)
+## Generation Modes
 
-- **A** Text → Video
+- **A** Text → Video (single shot, default)
 - **B** Reference → Video (Veo 3.1 Ingredients)
-- **C** First Frame → Video
-- **D** First + Last Frame → Video
-- **E** Multi-shot continuity (scene extension)
+- **C** `MULTI_SHOT_TIMED` — timestamped segments from actually-fitted script timing
+- **D** `validate_duration()` enforces Veo 3.1's 4s/6s/8s clip lengths
 
 ## Requirements
 

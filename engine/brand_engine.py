@@ -1,4 +1,4 @@
-from .types import BrandPolicy
+from .types import BrandPolicy, ModelSpec, VariantSpec
 
 
 BRAND_POLICIES = {
@@ -106,6 +106,121 @@ DEFAULT_POLICY = BrandPolicy(
 )
 
 
+# ─── Model / variant / feature database ─────────────────────────────
+# Feature claims are only emitted for the model/variant that actually has them.
+
+def _V(name, features, transmission=""):
+    return VariantSpec(name=name, features=features, transmission=transmission)
+
+
+MODEL_FEATURES = {
+    "Hyundai": {
+        "Creta": ModelSpec(
+            model="Creta",
+            body_type="SUV",
+            variants=[
+                _V("E", [], "manual"),
+                _V("S", ["traction control"], "manual"),
+                _V("S(O)", ["traction control"], "manual"),
+                _V("SX", ["sunroof", "BlueLink", "rear camera"], "manual"),
+                _V("SX(O)", ["panoramic sunroof", "BlueLink", "e-CALL", "SmartSense", "ventilated seats"], "automatic"),
+                _V("SX(O) Turbo", ["panoramic sunroof", "BlueLink", "e-CALL", "SmartSense", "ventilated seats"], "automatic"),
+            ],
+            shared_features=["All-New Creta", "LED headlamps", "bluetooth"],
+            unavailable_features=["ADAS Level 2"],
+        ),
+        "Venue": ModelSpec(
+            model="Venue",
+            body_type="SUV",
+            variants=[
+                _V("E", ["traction control"], "manual"),
+                _V("S", ["traction control"], "manual"),
+                _V("S(O)", ["received bluelink", "rear camera"], "manual"),
+                _V("SX(O)", ["BlueLink", "panoramic sunroof", "SmartSense", "ventilated seats"], "automatic"),
+            ],
+            shared_features=["LED headlamps"],
+            unavailable_features=["ADAS Level 2"],
+        ),
+        "Verna": ModelSpec(
+            model="Verna",
+            body_type="sedan",
+            variants=[
+                _V("S", ["bluetooth"], "manual"),
+                _V("SX", ["BlueLink", "rear camera"], "manual"),
+                _V("SX(O)", ["BlueLink", "panoramic sunroof", "SmartSense", "ventilated seats"], "automatic"),
+            ],
+            shared_features=[],
+            unavailable_features=["ADAS Level 2"],
+        ),
+        "Alcazar": ModelSpec(
+            model="Alcazar",
+            body_type="SUV",
+            variants=[
+                _V("Prestige", ["sunroof", "BlueLink"], "manual"),
+                _V("Platinum", ["panoramic sunroof", "BlueLink", "ventilated seats"], "automatic"),
+                _V("Platinum(O)", ["panoramic sunroof", "BlueLink", "e-CALL", "SmartSense"], "automatic"),
+            ],
+            shared_features=["6-seat option", "LED headlamps"],
+            unavailable_features=["ADAS Level 2"],
+        ),
+    },
+    "Tata": {
+        "Nexon": ModelSpec(
+            model="Nexon",
+            body_type="SUV",
+            variants=[
+                _V("Creative", []),
+                _V("Fearless", ["panoramic sunroof", "connected car tech"]),
+                _V("Fearless+", ["panoramic sunroof", "connected car tech", "5-star GNCAP safety"]),
+            ],
+            shared_features=["5-star GNCAP safety"],
+            unavailable_features=["ADAS"],
+        ),
+        "Harrier": ModelSpec(
+            model="Harrier",
+            body_type="SUV",
+            variants=[
+                _V("Smart", []),
+                _V("Fearless", ["panoramic sunroof"]),
+                _V("Fearless+", ["panoramic sunroof", "connected car tech", "ADAS", "5-star GNCAP safety"]),
+            ],
+            shared_features=["5-star GNCAP safety"],
+            unavailable_features=[],
+        ),
+        "Safari": ModelSpec(
+            model="Safari",
+            body_type="SUV",
+            variants=[
+                _V("Smart", []),
+                _V("Fearless", ["panoramic sunroof"]),
+                _V("Fearless+", ["panoramic sunroof", "connected car tech", "ADAS", "5-star GNCAP safety"]),
+            ],
+            shared_features=["5-star GNCAP safety"],
+            unavailable_features=[],
+        ),
+    },
+}
+
+
+def get_model_spec(brand: str, model: str) -> ModelSpec:
+    """Model-level spec for a brand+model, for feature-applicability checks."""
+    db = MODEL_FEATURES.get(brand, {})
+    return db.get(model)
+
+
+def validate_model_feature(brand: str, model: str, feature: str) -> dict:
+    """Would 'feature' be a verifiable claim for this model?"""
+    spec = get_model_spec(brand, model)
+    if spec is None:
+        return {
+            "verifiable": False,
+            "feature": feature,
+            "model": model,
+            "reason": "model not in feature database — treat claim as unverified",
+        }
+    return {**spec.feature_applicability(feature), "verifiable": True}
+
+
 def get_brand_policy(brand: str) -> BrandPolicy:
     """Get brand policy. Returns generic safe policy if brand unknown."""
     return BRAND_POLICIES.get(brand, DEFAULT_POLICY)
@@ -116,8 +231,8 @@ def validate_brand_safety(policy: BrandPolicy, model: str, offer_text: str = "",
     violations = []
     text = " ".join([model, offer_text, script_text]).lower()
 
-    if policy.approved_model_names and text:
-        if model.lower() and model.lower() not in [m.lower() for m in policy.approved_model_names]:
+    if policy.approved_model_names and model.lower():
+        if model.lower() not in [m.lower() for m in policy.approved_model_names]:
             violations.append(f"Model '{model}' not in approved list: {policy.approved_model_names}")
 
     if policy.no_invented_claims and any(word in text for word in ["zero down payment", "₹50,000 cashback", "7.99% emi"]):
@@ -132,9 +247,9 @@ def validate_brand_safety(policy: BrandPolicy, model: str, offer_text: str = "",
 def build_brand_constraint_section(policy: BrandPolicy) -> str:
     """Build brand constraint paragraph for prompt metadata."""
     lines = []
-    lines.append(f"Brand: {policy.brand} (official dealership setting)")
+    lines.append(f"{policy.brand} (official dealership setting)")
     if policy.approved_terminology:
-        lines.append(f"Approved terminology: {', '.join(policy.approved_terminology)}")
+        lines.append(f"Approved terms: {', '.join(policy.approved_terminology)}")
     lines.append("No invented claims, no altered vehicle geometry")
     lines.append("Do not generate readable logos or model-name text")
     return ". ".join(lines)

@@ -23,6 +23,15 @@ Sources:
 
 ## Optimal Prompt Structure
 
+> **Engine convention note:** the `Dialogue: ...`, `SFX: ...`, `Ambient: ...`,
+> `Music: ...` **colon format** used below is the *convention this engine emits*
+> as the cleanest way to express Veo's native audio guidance. It is NOT a
+> Google-mandated syntax requirement — it is our ISO-like formatting contract.
+> Veo 3.1 accepts natural prose; the colon labels make the segments
+> unambiguous, version-controlled, and validation-friendly. The generated
+> prompt is kept inside a **40-180-word budget** (under 40 = the model
+> auto-expands uncontrollably; over 180 = instructions get dropped).
+
 ### Cinematography (Camera)
 - **ONE camera move** per clip. Two = "swooping mess"
 - Use standard terms: `dolly in`, `tracking shot`, `slow pan`, `crane shot`, `macro glide`
@@ -36,11 +45,11 @@ Sources:
 - Texture words for materials: "gleaming", "matte black", "polished chrome"
 
 ### Action
-- **ONE action/beat** per clip (8 seconds)
+- **ONE primary action** per clip, with up to 3 supporting beats (single-shot default)
 - Chained actions ("then", "after that") cause morphs
 - Physical description over emotion
 - Micro-actions for people: "genuine smile", "nodding in approval"
-- Use colon (:) for speech, not quotes (to avoid text rendering)
+- Dialogue: engine emits `Dialogue: <text>` (colon label), not quotes
 
 ### Context / Setting
 - Sensory language: specific lighting, time of day, location
@@ -56,27 +65,44 @@ Sources:
 ### Audio (Veo 3/3.1 native)
 - The **#1 missed lever** in Veo prompting
 - Every prompt should include audio: dialogue, SFX, ambient, or all three
-- Dialogue: use `colon:` format, not quotes
+- Dialogue: emitted as `Dialogue: <snip>` by the engine (colon convention)
 - Short lines sync best: under 12 words for 8 seconds
 - Label SFX: `SFX: keys jingling, confetti pop`
 - Label ambient: `Ambient: soft showroom hum, crowd murmur`
 
 ---
 
+## Clips, Durations & Modes
+
+- Veo 3.1 generates clips of **4, 6 or 8 seconds** — the engine validates
+  `duration` against this capability table, not just "8s".
+- **Single-shot (default):** the whole ad is ONE continuous clip; ONE camera
+  move, ONE primary action, up to 3 supporting beats.
+- **Multi-shot timed:** for longer ads, Veo 3.1's *time-based prompting*
+  stitches timestamped segments (`[00:00.0] ...`) into one video. The engine
+  offers a `MULTI_SHOT_TIMED` scaffold whose segment boundaries come from the
+  *actual fitted script timing* (see `Script.spoken_lines`).
+- **Reference images:** Veo 3.1's Ingredients-to-Video accepts up to 5
+  reference images and is limited to **8-second** clips; the engine carries
+  immutable vehicle identity (model/colour/trim) + a scale graph so those
+  attributes survive generation while camera-mutable properties (position,
+  orientation) are free to change.
+
 ## Key Rules
 
 | Rule | Why |
 |------|-----|
 | One camera move | Two moves fight, producing random drift |
-| One action | Chained verbs cause morphs in short clips |
-| 40-120 words | Under 15 words = auto-expanded uncontrollably; over 100 = instructions dropped |
+| One primary action | Chained verbs cause morphs in short clips |
+| 40-180 words | Under 15 words = auto-expanded uncontrollably; over 180 = instructions dropped |
 | Always include audio | Veo generates synced native audio; silence = generic hum |
 | Physical > emotional | "genuine smile" > "happy" (model can't visualize emotion) |
 | 9:16 vertical for Reels | Instagram Reels format = portrait orientation |
 | No readable text | Models render garbled pseudo-lettering; composite later |
+| Generated vs composited | Engine splits "generated in Veo" (cinematography/material) from "composited after" (logo, offer badge, CTA) |
 | Negatives as descriptions | "empty, uncluttered floor" not "no clutter" |
 | Seed consistency | Same seed = same output; reuse across related shots |
-| 8s max per clip | Use scene extension for longer sequences |
+| Clips are 4/6/8s | Use multi-shot timed mode for longer sequences |
 
 ---
 
