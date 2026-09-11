@@ -18,6 +18,7 @@ result = full_pipeline(
 print(result["prompt"])          # Ready-to-paste Veo prompt
 print(result["validation"])      # Validation report
 print(result["repair_log"])      # What the engine auto-repaired
+print(result["blueprint"])       # The strict CreativeBlueprint object (ONE dominant action…)
 ```
 
 ## Architecture
@@ -35,13 +36,16 @@ Offer Engine            verified claims only — no hallucinated numbers
   ↓
 Reference Engine       person / vehicle / environment profiles → Veo Ingredients block
   ↓
-Prompt Compiler        [Cinematography] [Subject] [Action] [Context] [Style] [Audio]
+Creative Blueprint     ONE strict internal object — Campaign · Presenter · Vehicle · Shot
+                       · Action (ONE dominant + micro + background) · Script · Audio · Post
+  ↓
+Compiler               Blueprint → narrative Veo prompt (canonical payload) + structured form
   ↓
 Validator              12 checks (camera count, action count, dialogue fit, text risk, offer claims…)
   ↓
-Repair Loop            auto-trims/rewrites to pass
+Repair Loop            auto-trims/rewrites the plans → Blueprint rebuilt → recompiled
   ↓
-Final Veo Prompt       9:16 · 8s · native audio
+Final Veo Prompt       9:16 · 8s · native audio · ONE dominant action, no competing intents
 ```
 
 ## Modules
@@ -56,7 +60,7 @@ Final Veo Prompt       9:16 · 8s · native audio
 | `camera_engine.py` | Shot-specific composition: headroom, hand visibility, safe zones, vehicle position |
 | `audio_engine.py` | Voice/music/ambience/SFX/mixing priority; dialogue fit estimation |
 | `brand_engine.py` | Per-OEM policy: approved models, terminology, no invented claims, logo handling |
-| `prompt_compiler.py` | Compiles all plans into the final Veo prompt (5+1 formula) |
+| `prompt_compiler.py` | `build_blueprint()` folds every plan into a `CreativeBlueprint`; compilers render narrative + structured prompts from it |
 | `validator.py` | 12 automated checks — camera move count, action count, verb density, dialogue word count, estimated speech duration, subject count, reference integrity, frame safety, offer claim validation, text-generation risk |
 | `repair.py` | Auto-fixes: collapses multiple camera moves, trims dialogue to fit, reduces actions |
 

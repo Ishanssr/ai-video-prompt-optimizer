@@ -1,6 +1,9 @@
 from .types import (
-    Brief, ScenePlan, ReferenceProfile, Script, OfferClaim, BrandPolicy,
-    ContentFormat, GenerationMode, ScriptLanguage,
+    Brief, ScenePlan, ReferenceProfile, Script, ScriptLine, OfferClaim, BrandPolicy,
+    ContentFormat, GenerationMode, ScriptLanguage, CreativeBlueprint,
+    CampaignSpec, PresenterSpec, VehicleSpec, ShotSpec, ActionSpec,
+    ScriptSpec, BlueprintAudio, PostPlan, ValidationResult,
+    CampaignObjective, AdConcept, VoiceStyle, ShotComposition,
 )
 from .scene_planner import plan_scene
 from .camera_engine import get_safe_zone_prompt
@@ -30,7 +33,7 @@ def overlay_plan(
     generated = [
         "cinematography (single camera move)",
         "subject + secondary subject scene",
-        "primary action + supporting beats",
+        "dominant action + continuous micro-behavior",
         "context / lighting",
         "audio: dialogue, music, ambient, SFX",
     ]
@@ -110,10 +113,13 @@ def compile_prompt(
     if secondary:
         sections.append(f"Secondary subject: {secondary}")
 
-    action_line = scene.primary_action
-    if scene.supporting_beats:
-        action_line += " while " + ", ".join(scene.supporting_beats)
+    action_line = scene.dominant_action or scene.primary_action
+    micro = (scene.micro_behavior or "").strip()
+    if micro:
+        action_line += f", {micro}"
     sections.append(f"Action: {action_line}")
+    if (scene.background_behavior or "").strip():
+        sections.append(f"Background: {scene.background_behavior}")
 
     if reference and reference.environment:
         env = reference.environment
@@ -192,10 +198,15 @@ def compile_narrative(
             f"featuring {subject}."
         )
 
-    action_line = scene.primary_action
-    if scene.supporting_beats:
-        action_line += " while " + ", ".join(scene.supporting_beats)
-    sentences.append(action_line.capitalize() + ". Natural, believable movements throughout.")
+    dominant = scene.dominant_action or scene.primary_action
+    micro = (scene.micro_behavior or "").strip()
+    background = (scene.background_behavior or "").strip()
+    action_sentence = dominant.capitalize()
+    if micro:
+        action_sentence += f", while {micro}"
+    if background:
+        action_sentence += f", as {background}"
+    sentences.append(action_sentence + ".")
 
     sentences.append(
         f"Set in {scene.location}, {scene.lighting}."
@@ -262,6 +273,126 @@ def _tone_for_ad(scene: ScenePlan) -> str:
     if "reveal" in scene.primary_action:
         return "epic dramatic grade"
     return "elevated commercial polish"
+
+
+# ─── Creative Blueprint builder (v2) ───────────────────────────────
+
+def build_blueprint(
+    brief: Brief = None,
+    scene: ScenePlan = None,
+    script: Script = None,
+    creative: dict = None,
+    reference: ReferenceProfile = None,
+    offer: OfferClaim = None,
+    brand_policy: BrandPolicy = None,
+    duration: int = 8,
+    format: ContentFormat = None,
+    language: ScriptLanguage = None,
+    generation_mode: GenerationMode = GenerationMode.SINGLE_SHOT,
+) -> CreativeBlueprint:
+    """Converge every plan into ONE CreativeBlueprint.
+
+    The Blueprint is the strict internal contract: after this point the Veo
+    prompt is a pure compiler output. Repair mutates the inputs (Script /
+    ScenePlan); the compiler re-renders from the Blueprint.
+    """
+    lang = language or (script.language if script else ScriptLanguage.HINDI)
+    fmt = format or (brief.format if brief else ContentFormat.INSTAGRAM_REEL)
+    obj = brief.objective if brief else CampaignObjective.ENQUIRY
+    concept = brief.ad_concept if brief else AdConcept.PRESENTER_LED
+    creative = creative or {}
+    scene = scene or ScenePlan()
+    script = script or Script(
+        hook=ScriptLine("hook", ""), offer=ScriptLine("offer", ""),
+        product=ScriptLine("product", ""), benefit=ScriptLine("benefit", ""),
+        cta=ScriptLine("cta", ""), language=lang,
+    )
+    comp = scene.composition or ShotComposition()
+    presenter_info = creative.get("presenter") or {}
+    ref_vehicle = reference.vehicle if (reference and reference.vehicle) else None
+    ref_person = reference.person if (reference and reference.person) else None
+
+    campaign = CampaignSpec(
+        objective=obj, ad_concept=concept, format=fmt, language=lang,
+        duration=duration,
+        audience="dealership walk-in shoppers",
+        proof=(offer.source if offer else ""),
+        creative_pattern="offer_first",
+        hook_strategy=(creative.get("hook_strategy") or {}).get("type", ""),
+        ad_structure=creative.get("ad_structure") or {},
+    )
+
+    presenter = PresenterSpec(
+        type=presenter_info.get("type", "salesperson"),
+        description=presenter_info.get("description", ""),
+        position=presenter_info.get("position", "midground"),
+        camera_relationship=presenter_info.get("camera_relationship", "direct_to_camera"),
+        hand_visibility=presenter_info.get("hand_visibility", "natural"),
+        voice=script.voice_style.value,
+        reference_person=ref_person,
+    )
+
+    scale_m = (reference.scale.presenter_to_vehicle_m
+               if (reference and reference.scale) else 1.5)
+    vehicle = VehicleSpec(
+        model=(brief.car_model if brief else "") or (ref_vehicle.model if ref_vehicle else ""),
+        colour=(brief.car_colour if brief else "") or (ref_vehicle.colour if ref_vehicle else ""),
+        body_type=(ref_vehicle.body_type if ref_vehicle else "SUV"),
+        generation=(ref_vehicle.generation if ref_vehicle else "current"),
+        trim=(ref_vehicle.trim if ref_vehicle else ""),
+        position=(ref_vehicle.position if ref_vehicle else "rear_three_quarter"),
+        orientation=(ref_vehicle.orientation if ref_vehicle else "angled_front"),
+        relation_to_presenter=f"{scale_m}m beside the presenter",
+        reference_vehicle=ref_vehicle,
+    )
+
+    shot = ShotSpec(
+        shot_type=comp.shot_type, camera_move=comp.camera_move,
+        headroom=comp.headroom, hand_visibility=comp.hand_visibility,
+        depth=comp.depth, offer_card_visibility=comp.offer_card_visibility,
+        vehicle_visibility=comp.vehicle_visibility, safe_zone=comp.safe_zone,
+        cta_safe_zone=comp.cta_safe_zone,
+        aspect_ratio=scene.aspect_ratio, duration=duration,
+    )
+
+    action = ActionSpec(
+        dominant=scene.dominant_action or scene.primary_action,
+        micro_behavior=scene.micro_behavior,
+        background_behavior=scene.background_behavior,
+    )
+
+    script_spec = ScriptSpec(
+        hook=script.hook.text, offer=script.offer.text,
+        product=script.product.text, benefit=script.benefit.text,
+        cta=script.cta.text,
+        dialogue=script.dialogue_text(duration, rewritten=True),
+        language=lang, voice_style=script.voice_style,
+        pacing=script.pacing,
+    )
+
+    audio = BlueprintAudio(
+        voice_priority=scene.audio.voice_priority if scene.audio else "dominant",
+        music_style=scene.audio.music_style if scene.audio else "",
+        ambient=list(scene.audio.ambient_sounds) if scene.audio else [],
+        sfx=scene.audio.key_sfx if scene.audio else "",
+        cta_emphasis=scene.audio.cta_emphasis if scene.audio else "final_sentence",
+        dialogue=script_spec.dialogue,
+    )
+
+    post = PostPlan(
+        offer_card=comp.offer_card_visibility,
+        cta_overlay=comp.cta_safe_zone,
+        logo=bool(brand_policy and brand_policy.logo_handling == "do_not_generate_text"),
+        contact_info=bool(brand_policy and brand_policy.contact_info),
+        disclaimer=bool(brand_policy and brand_policy.disclaimer),
+    )
+
+    return CreativeBlueprint(
+        campaign=campaign, presenter=presenter, vehicle=vehicle,
+        shot=shot, action=action, script=script_spec, audio=audio, post=post,
+        generation_mode=generation_mode, reference=reference,
+        brand_policy=brand_policy, ad_timeline=scene.ad_timeline,
+    )
 
 
 # ─── Validation + repair loop ──────────────────────────────────────
@@ -465,22 +596,48 @@ def _run_full_pipeline(brief: Brief, brand_policy: BrandPolicy = None, legacy_sc
     repaired_scene = optimized["scene"]
     repaired_script = optimized["script"]
 
+    blueprint = build_blueprint(
+        brief=brief, scene=repaired_scene, script=repaired_script,
+        creative=creative, reference=reference, offer=offer,
+        brand_policy=policy, duration=brief.duration,
+        format=brief.format, language=brief.language,
+        generation_mode=brief.generation_mode,
+    )
+
+    narrative = compile_narrative(
+        repaired_scene, repaired_script, reference, offer, policy,
+        language=brief.language.value, duration=brief.duration,
+        mode=brief.generation_mode,
+    )
+
+    # Length contract applies to the CANONICAL payload (narrative), not the
+    # inspection-form structured prompt. Re-baseline warnings + final score.
+    validation = dict(optimized["validation"])
+    warnings = [w for w in validation["warnings"] if not w.startswith("Prompt long")]
+    n_words = len(narrative.split())
+    if n_words > 180:
+        warnings.append(f"Prompt long ({n_words} words) — model may drop instructions")
+    validation["warnings"] = warnings
+    payload_result = ValidationResult(errors=validation["errors"], warnings=warnings)
+    payload_score = score_validation(payload_result)
+    final_score = dict(optimized["score"])
+    final_score["final"] = payload_score.score
+    final_score["final_grade"] = payload_score.grade
+
     return {
         "brief": brief,
         "creative": creative,
         "script": repaired_script,
         "raw_script": script,
         "scene": repaired_scene,
-        "prompt": optimized["prompt"],
-        "prompt_narrative": compile_narrative(
-            repaired_scene, repaired_script, reference, offer, policy,
-            language=brief.language.value, duration=brief.duration,
-            mode=brief.generation_mode,
-        ),
+        "blueprint": blueprint,
+        "prompt": narrative,
+        "prompt_structured": optimized["prompt"],
+        "prompt_narrative": narrative,
         "prompt_timed": compile_timed_prompt(repaired_scene, repaired_script) if brief.generation_mode == GenerationMode.MULTI_SHOT_TIMED else "",
         "overlay_plan": overlay_plan(repaired_scene, offer, policy),
-        "validation": optimized["validation"],
-        "score": optimized["score"],
+        "validation": validation,
+        "score": final_score,
         "repair_log": optimized["repair_log"],
         "was_repaired": optimized["was_repaired"],
         "timeline": repaired_scene.ad_timeline,

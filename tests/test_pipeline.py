@@ -3,7 +3,7 @@
 from engine import (
     Brief, CampaignObjective, AdConcept, ContentFormat, ScriptLanguage,
     GenerationMode, OfferType, create_verified_offer, full_pipeline,
-    resolve_visual_action, create_reference_profile,
+    resolve_visual_action, create_reference_profile, CreativeBlueprint,
 )
 
 
@@ -48,11 +48,18 @@ def test_clean_brief_validates_clean():
 
 def test_prompt_has_all_sections():
     out = full_pipeline(_brief())
-    lines = out["prompt"].split("\n")
-    prefixes = ["Cinematography:", "Subject:", "Action:", "Context:", "Style:",
-                "Audio:", "Format:"]
+    lines = out["prompt_structured"].split("\n")
+    prefixes = ["Cinematography:", "Subject:", "Action:", "Background:", "Context:",
+                "Style:", "Audio:", "Format:"]
     for p in prefixes:
         assert any(l.startswith(p) for l in lines), p
+
+
+def test_narrative_is_the_canonical_payload():
+    out = full_pipeline(_brief())
+    assert out["prompt"] == out["prompt_narrative"]
+    assert out["prompt_structured"] != out["prompt"]
+    assert len(out["prompt"].split()) > 50
 
 
 def test_overlay_split_present():
@@ -64,6 +71,24 @@ def test_overlay_split_present():
 def test_narrative_paragraph_compiles():
     out = full_pipeline(_brief())
     assert len(out["prompt_narrative"].split()) > 30
+
+
+def test_blueprint_contract_holds():
+    out = full_pipeline(_brief())
+    bp = out["blueprint"]
+    assert isinstance(bp, CreativeBlueprint)
+    assert bp.campaign.duration == 8
+    assert bp.campaign.objective == CampaignObjective.ENQUIRY
+    # ONE dominant action + continuous micro-behavior + inert background
+    assert bp.action.dominant
+    assert bp.action.micro_behavior
+    assert bp.action.background_behavior
+    assert bp.presenter.type
+    assert bp.shot.aspect_ratio == "9:16"
+    assert bp.post.offer_card and bp.post.cta_overlay
+    # blueprint must drive the structured prompt
+    assert bp.action.dominant.lower() in out["prompt_structured"].lower()
+    assert "one" not in bp.action.dominant.lower()
 
 
 def test_timeline_derived_from_speech():

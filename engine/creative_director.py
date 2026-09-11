@@ -7,47 +7,56 @@ from .types import (
 # ONE source of truth for the on-screen action. Every layer (creative
 # director, scene planner, compiler, validator) reads from this table, so
 # the "3 actions vs 1 action" divergence can no longer happen.
-# Each concept has exactly ONE primary action + up to 3 supporting beats
-# (beats are written as gerund phrases so they grammatically chain on
-# "while …").
+# Model: EXACTLY ONE dominant action + ONE optional CONTINUOUS micro-behavior
+# + an inert background behavior. An 8s single shot holds one dominant
+# visible behavior; it does not chain competing actions.
 VISUAL_ACTIONS = {
     (CampaignObjective.ENQUIRY, AdConcept.PRESENTER_LED): {
-        "primary": "presenter speaks directly to camera",
-        "beats": ["gesturing toward the car", "raising an offer card"],
+        "primary": "holds up the offer card to camera",
+        "micro_behavior": "speaking naturally",
+        "background": "vehicle remains parked static beside the presenter",
     },
     (CampaignObjective.OFFER_AWARENESS, AdConcept.PRESENTER_LED): {
-        "primary": "presenter speaks directly to camera",
-        "beats": ["holding up an offer card", "pointing to car features"],
+        "primary": "presents the offer card toward camera",
+        "micro_behavior": "speaking naturally",
+        "background": "car stays glowing under showroom lights",
     },
     (CampaignObjective.BOOKING, AdConcept.PRESENTER_LED): {
-        "primary": "presenter speaks directly to camera",
-        "beats": ["inviting for a test drive", "walking toward the car"],
+        "primary": "invites the viewer for a test drive",
+        "micro_behavior": "speaking naturally",
+        "background": "car waits parked behind the presenter",
     },
     (CampaignObjective.TEST_DRIVE, AdConcept.PRESENTER_LED): {
-        "primary": "presenter speaks directly to camera",
-        "beats": ["pointing to the car", "offering the keys"],
+        "primary": "offers the test drive to the viewer",
+        "micro_behavior": "speaking naturally",
+        "background": "vehicle remains stationary in frame",
     },
     (CampaignObjective.DELIVERY, AdConcept.DELIVERY_MOMENT): {
-        "primary": "family receives the car keys",
-        "beats": ["embracing in celebration", "opening the car door"],
+        "primary": "hands over the car keys",
+        "micro_behavior": "smiling warmly",
+        "background": "new car waits polished behind the family",
     },
     (CampaignObjective.FESTIVE_PROMO, AdConcept.FESTIVE_CELEBRATION): {
-        "primary": "family celebrates beside the festive car",
-        "beats": ["placing a garland on the car", "raising hands in joy"],
+        "primary": "celebrates beside the festive car",
+        "micro_behavior": "raising both hands in joy",
+        "background": "decorated car stays centred in frame",
     },
     (CampaignObjective.NEW_LAUNCH, AdConcept.REVEAL): {
-        "primary": "satin cover slides off the car",
-        "beats": ["converging spotlights", "presenter revealing the car"],
+        "primary": "the satin cover slides off the new car",
+        "micro_behavior": "spotlights crossing slowly over the body",
+        "background": "audience silhouettes watch in anticipation",
     },
     (CampaignObjective.SERVICE_BOOKING, AdConcept.SERVICE_TRUST): {
-        "primary": "technician inspects the car",
-        "beats": ["demonstrating care", "pointing to the service bay"],
+        "primary": "inspects the car carefully",
+        "micro_behavior": "working with precision",
+        "background": "car rests steady on the lift",
     },
 }
 
 _ACTION_FALLBACK = {
-    "primary": "presenter speaks directly to camera",
-    "beats": ["gestures toward the car"],
+    "primary": "holds up the offer card to camera",
+    "micro_behavior": "speaking naturally",
+    "background": "vehicle remains parked static beside the presenter",
 }
 
 

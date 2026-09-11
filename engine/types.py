@@ -531,6 +531,9 @@ class ScenePlan:
     subject: str = ""
     secondary_subject: str = ""
     primary_action: str = ""
+    dominant_action: str = ""
+    micro_behavior: str = ""
+    background_behavior: str = ""
     supporting_beats: list = field(default_factory=list)
     location: str = ""
     lighting: str = ""
@@ -565,6 +568,130 @@ class AdTimeline:
             t += dur
             segments[name] = (round(start, 1), round(t, 1))
         return segments
+
+
+# ─── Creative Blueprint (v2 — the strict internal contract) ──────────
+# Every layer converges into ONE CreativeBlueprint; the Veo prompt is then a
+# pure compiler output from it. Nothing downstream rewrites the prose around
+# it — repair mutates the inputs, the compiler re-renders.
+
+@dataclass
+class CampaignSpec:
+    objective: CampaignObjective
+    ad_concept: AdConcept
+    format: ContentFormat = ContentFormat.INSTAGRAM_REEL
+    language: ScriptLanguage = ScriptLanguage.HINDI
+    duration: int = 8
+    audience: str = ""
+    proof: str = ""
+    creative_pattern: str = "offer_first"
+    hook_strategy: str = ""
+    ad_structure: dict = field(default_factory=dict)
+
+
+@dataclass
+class PresenterSpec:
+    type: str = "salesperson"
+    description: str = ""
+    position: str = "midground"
+    camera_relationship: str = "direct_to_camera"
+    hand_visibility: str = "natural"
+    voice: str = ""
+    reference_person: Optional["ReferencePerson"] = None
+
+
+@dataclass
+class VehicleSpec:
+    model: str = ""
+    colour: str = ""
+    body_type: str = "SUV"
+    generation: str = "current"
+    trim: str = ""
+    position: str = "rear_three_quarter"
+    orientation: str = "angled_front"
+    relation_to_presenter: str = "1.5m beside the presenter"
+    reference_vehicle: Optional["ReferenceVehicle"] = None
+
+
+@dataclass
+class ShotSpec:
+    shot_type: str = "medium presenter shot"
+    camera_move: str = "slow push-in"
+    headroom: str = "standard"
+    hand_visibility: str = "natural"
+    depth: str = "shallow"
+    offer_card_visibility: Optional[str] = None
+    vehicle_visibility: str = "background"
+    safe_zone: str = "9:16_center"
+    cta_safe_zone: str = "lower_third"
+    aspect_ratio: str = "9:16"
+    duration: int = 8
+
+
+@dataclass
+class ActionSpec:
+    """ONE dominant action + optional CONTINUOUS micro-behavior + background.
+
+    Not "one primary + up to 3 beats": an 8s single shot holds ONE dominant
+    visible action. The micro-behavior is a continuous, non-competitive trait
+    (e.g. speaking naturally); the background behavior is inert context.
+    """
+    dominant: str = ""
+    micro_behavior: str = ""
+    background_behavior: str = ""
+
+    @property
+    def primary(self) -> str:
+        return self.dominant
+
+
+@dataclass
+class ScriptSpec:
+    hook: str = ""
+    offer: str = ""
+    product: str = ""
+    benefit: str = ""
+    cta: str = ""
+    dialogue: str = ""
+    language: ScriptLanguage = ScriptLanguage.HINDI
+    voice_style: VoiceStyle = VoiceStyle.CONFIDENT
+    pacing: DeliveryPacing = DeliveryPacing.MEDIUM_FAST
+
+
+@dataclass
+class BlueprintAudio:
+    voice_priority: str = "dominant"
+    music_style: str = ""
+    ambient: list = field(default_factory=list)
+    sfx: str = ""
+    cta_emphasis: str = "final_sentence"
+    dialogue: str = ""
+
+
+@dataclass
+class PostPlan:
+    offer_card: Optional[str] = None
+    cta_overlay: Optional[str] = None
+    logo: bool = True
+    contact_info: bool = False
+    disclaimer: bool = False
+
+
+@dataclass
+class CreativeBlueprint:
+    """The strict internal object the whole engine compiles from."""
+    campaign: CampaignSpec
+    presenter: PresenterSpec
+    vehicle: VehicleSpec
+    shot: ShotSpec
+    action: ActionSpec
+    script: ScriptSpec
+    audio: BlueprintAudio
+    post: PostPlan
+    generation_mode: GenerationMode = GenerationMode.SINGLE_SHOT
+    reference: Optional["ReferenceProfile"] = None
+    brand_policy: Optional["BrandPolicy"] = None
+    ad_timeline: Optional[dict] = None
 
 
 # ─── Brand Safety ───────────────────────────────────────────────────

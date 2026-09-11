@@ -20,6 +20,8 @@ from .types import (
     BrandPolicy, ValidationResult, ValidationScore,
     SpeechModel, SpeechBudget, Brief, RepairOp, RepairResult,
     VeoCapability, VEO_3_1,
+    CreativeBlueprint, CampaignSpec, PresenterSpec, VehicleSpec,
+    ShotSpec, ActionSpec, ScriptSpec, BlueprintAudio, PostPlan,
 )
 from .creative_director import (
     creative_director, resolve_visual_action, VISUAL_ACTIONS,
@@ -53,6 +55,7 @@ from .camera_engine import (
 from .prompt_compiler import (
     compile_prompt, compile_optimized_prompt, full_pipeline,
     compile_narrative, compile_timed_prompt, overlay_plan,
+    build_blueprint,
 )
 from .validator import (
     validate_prompt, count_camera_moves, count_primary_actions,
@@ -82,6 +85,8 @@ __all__ = [
     "BrandPolicy", "ValidationResult", "ValidationScore",
     "SpeechModel", "SpeechBudget", "Brief", "RepairOp", "RepairResult",
     "VeoCapability", "VEO_3_1",
+    "CreativeBlueprint", "CampaignSpec", "PresenterSpec", "VehicleSpec",
+    "ShotSpec", "ActionSpec", "ScriptSpec", "BlueprintAudio", "PostPlan",
     "creative_director", "resolve_visual_action", "VISUAL_ACTIONS",
     "generate_script", "script_to_colon_format", "estimate_speech_duration_seconds",
     "rewrite_script_to_fit", "speech_rates",
@@ -99,6 +104,7 @@ __all__ = [
     "compose_shot", "camera_to_veo_prompt", "get_safe_zone_prompt",
     "compile_prompt", "compile_optimized_prompt", "full_pipeline",
     "compile_narrative", "compile_timed_prompt", "overlay_plan",
+    "build_blueprint",
     "validate_prompt", "count_camera_moves", "count_primary_actions",
     "estimate_speech_duration", "check_offer_claims", "check_text_generation_risk",
     "check_commercial_claims", "score_validation", "validate_scene_plan",

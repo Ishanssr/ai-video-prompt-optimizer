@@ -15,7 +15,7 @@ Source: Google Cloud Blog - "Ultimate prompting guide for Veo 3.1"
 |---------|---------------|
 | **Cinematography** | ONE camera move per clip (slow push-in, dolly, tracking). Two moves fight each other |
 | **Subject** | Specific, detailed (car model, color, condition). Never "a car" |
-| **Action** | ONE primary action per clip, up to 3 supporting beats (single-shot default). Veo 3.1 multi-shot timed mode stitches timestamped segments instead |
+| **Action** | ONE dominant action + ONE continuous micro-behavior + inert background per clip (never `"speaks while walking and inspecting"`). Veo 3.1 multi-shot timed mode stitches timestamped segments instead |
 | **Context** | Sensory language: showroom, festive decor, time of day, lighting source |
 | **Lighting** | Single strongest realism anchor. Anchor to real sources (showroom LED, golden hour) |
 | **Style** | At END of prompt. "Cinematic color grade, shallow depth of field, film grain" |
@@ -47,12 +47,15 @@ dealer-video-prompt-engine/
 ├── engine/
 │   ├── __init__.py                 # Public API (full_pipeline, Brief, enums, ...)
 │   ├── types.py                    # Brief, CampaignObjective, AdConcept, ContentFormat,
-│   │                               # GenerationMode, ScriptLanguage, SpeechModel/ful natural
+│   │                               # GenerationMode, ScriptLanguage, SpeechModel + natural
 │   │                               # speech budget, OfferClaim/OfferType, ReferenceProfile,
-│   │                               # ScenePlan, ShotComn, Immutable/Mutable vehicle attrs,
-│   │                               # BrandPolicy, ValidationScore, RepairPlan ...
-│   ├── prompt_compiler.py          # full_pipeline() orchestration + compile_prompt +
-│   │                               # structural repair loop (validate → fix ScenePlan → recompile)
+│   │                               # ScenePlan, ShotComposition, Immutable/Mutable vehicle
+│   │                               # attrs, BrandPolicy, ValidationScore, RepairPlan,
+│   │                               # CreativeBlueprint (Campaign/Presenter/Vehicle/Shot/
+│   │                               # Action/Script/Audio/Post specs) ...
+│   ├── prompt_compiler.py          # full_pipeline() orchestration + build_blueprint() +
+│   │                               # Blueprint → narrative (canonical) + structured compilers
+│   │                               # + structural repair loop (validate → fix plan → recompile)
 │   ├── creative_director.py        # Strategy per objective+concept+format+language
 │   ├── script_engine.py            # Script with SpeechModel-budgeted lines + rewrite engine
 │   ├── scene_planner.py            # ScenePlan: single source of action/camera/motion
@@ -73,14 +76,18 @@ dealer-video-prompt-engine/
 
 ## Prompt Template Recipe (implemented)
 
-The engine compiles its prompts structurally from a `ScenePlan` + `Script` +
-`ReferenceProfile` + `BrandPolicy`, one labeled section per control axis:
+The engine folds every plan into a single `CreativeBlueprint` object
+(`build_blueprint()` in `prompt_compiler.py`), then compiles BOTH formats
+from it. The **narrative form is the canonical payload** (`full_pipeline()`
+returns it as `prompt`); the labeled form below is `prompt_structured` and is
+what the validator/repair loop reason over:
 
 ```
 Cinematography: <one camera move>            (no chained moves)
 Subject: <presenter/vehicle identity>
 Secondary subject: <vehicle w/ identity + position>   (deduped if same as subject)
-Action: <one primary action> while <beats>   (plan-derived, prose re-verified at validation)
+Action: <ONE dominant action>, <micro-behavior>   (never "while walking and inspecting")
+Background: <inert background behavior>
 Context: <location>. <lighting>.             (incl. environment reference overrides)
 Style: photorealistic commercial, ...
 Audio: Dialogue: ... Music: ... Ambient: ... SFX: ...
@@ -90,9 +97,18 @@ Composite after generation: <overlays>       (never generated in Veo)
 Format: 9:16 vertical, 8 seconds (Veo 3.1)
 ```
 
-Because the prose in the `Action:`/`Context:` sections is regenerated from the
-same plans every compile, a validator re-checks the *plans* — not regex-patched
-final text. Repair changes the `ScenePlan`/`Script`, then recompiles.
+The action contract is strict: **ONE dominant action + ONE continuous
+micro-behavior + an inert background behavior**. This kills the Veo failure
+mode of chained/competing intents (`"speaks while gesturing while inspecting"`).
+`ActionSpec` in the Blueprint pins `dominant` / `micro_behavior` /
+`background_behavior`; the compilers pass them through verbatim, so the
+Blueprint and the rendered prompt cannot drift.
+
+Because the prose is regenerated from the same plans every compile, a validator
+re-checks the *plans* — not regex-patched final text. Repair mutates the
+`ScenePlan`/`Script`, the Blueprint is rebuilt, then recompiled. The length
+(40-180 word) contract is enforced on the canonical narrative payload, not the
+verbose inspection form.
 
 ## Category Templates (based on reference reels)
 

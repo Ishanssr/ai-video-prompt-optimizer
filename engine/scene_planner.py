@@ -30,7 +30,10 @@ def plan_scene(
     timeline = _plan_timeline(objective, ad_concept, duration, script)
 
     action = (creative or {}).get("visual_action") or resolve_visual_action(objective, ad_concept)
-    beats = action.get("beats", [])[:3]
+    dominant = action.get("dominant") or action.get("primary", "")
+    micro = action.get("micro_behavior", "")
+    background = action.get("background", "")
+    beats = [b for b in [micro] if b]
 
     subject = _select_subject(ad_concept, brand, car_model)
     location = _select_location(ad_concept, brand)
@@ -50,7 +53,10 @@ def plan_scene(
         camera_move=composition.camera_move,
         subject=subject,
         secondary_subject=f"{car_colour} {car_model}" if car_model else "",
-        primary_action=action.get("primary", ""),
+        primary_action=dominant,
+        dominant_action=dominant,
+        micro_behavior=micro,
+        background_behavior=background,
         supporting_beats=beats,
         location=location,
         lighting=lighting,

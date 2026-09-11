@@ -47,10 +47,12 @@ _ACTION_INTENTS = {
     "gesture": [
         r"\bgesture[sd]?\b", r"\bgesturing\b", r"\bpoints?\b", r"\bpointing\b",
         r"\bwaves?\b", r"\bwaving\b", r"\braises?\b", r"\braising\b",
-        r"\bhands?\b", r"\bhanding\b", r"\bholding up\b", r"\boffering\b",
+        r"\bhands?\b", r"\bhanding\b", r"\bholds? up\b", r"\bholding up\b",
+        r"\boffers?\b", r"\boffering\b", r"\bpresents?\b", r"\bpresenting\b",
     ],
+    "invitation": [r"\binvites?\b", r"\binviting\b", r"\binvites the viewer\b"],
     "reveal": [r"\bslides? off\b", r"\breveal(?:ed|s|ing)?\b", r"\bunveil(?:ed|s|ing)?\b", r"\bcover slides?\b"],
-    "delivery": [r"\breceives? the keys?\b", r"\bhandover\b", r"\bkeys\b"],
+    "delivery": [r"\bhands? over\b", r"\breceives? the keys?\b", r"\bhandover\b", r"\bkeys\b"],
     "motion": [
         r"\bwalks?\b", r"\bwalking\b", r"\bapproaches?\b", r"\bapproaching\b",
         r"\bmoves?\b", r"\bmoving\b", r"\benters?\b", r"\bentering\b",
