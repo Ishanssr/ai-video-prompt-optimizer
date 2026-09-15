@@ -179,7 +179,12 @@ def conflicting_action_intents(scene_plan: ScenePlan, prompt: str) -> list:
     allowed |= set(action_intents(" ".join(scene_plan.supporting_beats)))
     if not allowed:
         return []
-    prose_intents = action_intents(_strip_cinematography_clause(prompt))
+    action_lines = [
+        line for line in prompt.split("\n")
+        if line.startswith("Action:") or line.startswith("Background:")
+    ]
+    prose_text = " ".join(action_lines) if action_lines else _strip_cinematography_clause(prompt)
+    prose_intents = action_intents(prose_text)
     return [i for i in prose_intents if i not in allowed]
 
 

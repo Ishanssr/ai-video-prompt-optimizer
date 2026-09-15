@@ -68,10 +68,21 @@ dealer-video-prompt-engine/
 │   └── repair.py                   # STRUCTURAL repair (fix the data, then recompile)
 ├── examples/
 │   ├── run_pipeline.py              # End-to-end demo (4 demos)
+│   ├── run_agent.py                 # Agent-engine offline demo (fake LLM, audit trail)
 │   └── sample_prompts.md            # Rendered examples
+├── agent/                           # LangGraph agent layer (requires venv + langgraph)
+│   ├── config.py                    # AgentConfig + VEO_AGENT_* env routing
+│   ├── llm.py                       # LLMClient + OpenAI/Anthropic/Gemini adapters + FakeLLM
+│   ├── graph.py                     # Strategist → Critic ⇄ Modifier → Finalize (AgentState)
+│   ├── compile.py                   # build_brief / compile_brief + dialogue_audit
+│   ├── mutations.py                 # bounded mutation targets + immutable anchors
+│   ├── rubric.py                    # 10-dim critique + gated pass (MUST_PASS ∩ ≥ target)
+│   ├── audit.py                     # JSONL trail + final.json per run
+│   └── api.py                       # run_agent() public entry (returns AgentResult)
 ├── references/
 │   └── veo_prompting_guide.md      # Research summary (corrected)
-└── tests/                          # run_all.py + per-module suites
+├── tests/                          # run_all.py (engine) + run_agent_all.py (agent)
+└── requirements.txt                # langgraph (agent layer only)
 ```
 
 ## Prompt Template Recipe (implemented)

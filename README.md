@@ -174,4 +174,34 @@ Unknown brands fall back to a strict generic policy.
 
 ## Requirements
 
-Python 3.9+, no external dependencies.
+- **Engine**: Python 3.9+, no external dependencies (run `python3 tests/run_all.py`).
+- **Agent layer** (`agent/`): Python 3.12+, `langgraph` (see `requirements.txt`). LLM provider SDKs (openai / anthropic / google-generativeai) are optional and lazily imported. Run `./.venv/bin/python tests/run_agent_all.py`.
+
+## Agent Engine (`agent/`)
+
+A LangGraph multi-agent loop on top of the deterministic engine. The **Blueprint stays canonical** — agents never write prompt text directly, they emit **bounded typed mutations** the engine applies and re-compiles:
+
+```
+user brief
+  ↓
+Strategist   proposes initial creative surface (hook/offer/benefit/CTA/voice/pacing/duration/ad_concept)
+  ↓
+Compile      engine builds the canonical Blueprint + narrative/structured prompts
+  ↓
+Critic       10-dim rubric (one dominant action, dialogue fit, offer integrity, frame safety …)
+  ↺  gate fails → Modifier → engine re-compiles → Critic
+  ↓
+Finalize     best engine-valid candidate  (accepted only if engine validation passed + rubric gate ≥ target)
+```
+
+- **Constrained mutation targets** (`agent/mutations.py`): hooks/offers/benefits/CTAs are short strings; `voice_style`/`pacing`/`ad_concept` are enums; `duration` ∈ [4, 8] (Veo 3.1 clip lengths). `objective`, `brand`, `model`, `car_colour`, `offer`, `reference` are **immutable anchors**.
+- **Dialogue audit**: the actual fitted script is compared to the requested creative lines. A proposed line that is silently dropped/altered (speech-budget fit) fails the `dialogue_fit` dimension, so the loop can never accept a prompt where a requested hook didn't land.
+- **Audit trail**: every round is logged to `agent_runs/<run_id>/trail.jsonl` + a `final.json` (deterministic keys, inputs, outputs, scores, rejected mutations).
+- **Providers**: `openai` (gpt-4o), `anthropic` (claude-sonnet-4-20250514), `gemini` (gemini-2.0-flash), and an offline deterministic `fake` for tests/demos.
+
+```bash
+.venv/bin/python examples/run_agent.py        # offline fake-LLM demo -> accepted prompt + audit trail
+VEO_AGENT_PROVIDER=openai VEO_AGENT_API_KEY=... .venv/bin/python examples/run_agent.py
+```
+
+Customize via env vars: `VEO_AGENT_MODEL`, `VEO_AGENT_MAX_ITERATIONS` (default 3), `VEO_AGENT_TARGET_SCORE` (default 85), `VEO_AGENT_AUDIT_DIR`.

@@ -20,3 +20,5 @@ Thumbs.db
 .env.*
 keys/
 *.pem
+# Agent run artifacts
+agent_runs/

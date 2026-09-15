@@ -1,0 +1,6 @@
+langgraph>=1.0
+
+# optional provider SDKs (lazily imported)
+# openai>=1.40
+# anthropic>=0.34
+# google-generativeai>=0.8
